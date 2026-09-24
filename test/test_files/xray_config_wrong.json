@@ -91,7 +91,6 @@
 			"props": {
 				"variant": "default",
 				"visible": true,
-				"equal_height": true,
 				"name": "row"
 			},
 			"skip_api": true,
@@ -233,7 +232,6 @@
 			"props": {
 				"variant": "default",
 				"visible": true,
-				"equal_height": true,
 				"name": "row"
 			},
 			"skip_api": true,

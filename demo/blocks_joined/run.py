@@ -25,7 +25,7 @@ with gr.Blocks() as demo:
         "DALL·E mini is an AI model that generates images from any prompt you give!"
     )
     with gr.Group():
-        with gr.Row(equal_height=True):
+        with gr.Row():
             text = gr.Textbox(
                 label="Enter your prompt",
                 max_lines=1,

@@ -31,7 +31,7 @@ examples = [
 ]
 
 with block as demo:
-    with gr.Row(elem_id="prompt-container", equal_height=True):
+    with gr.Row(elem_id="prompt-container"):
         text = gr.Textbox(
             label="Enter your prompt",
             show_label=False,

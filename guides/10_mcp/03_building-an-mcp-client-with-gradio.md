@@ -307,7 +307,7 @@ def gradio_interface():
         gr.Markdown("# MCP Weather Assistant")
         gr.Markdown("Connect to your MCP weather server and chat with the assistant")
         
-        with gr.Row(equal_height=True):
+        with gr.Row():
             with gr.Column(scale=4):
                 server_path = gr.Textbox(
                     label="Server Script Path",
@@ -326,7 +326,7 @@ def gradio_interface():
             avatar_images=("👤", "🤖")
         )
         
-        with gr.Row(equal_height=True):
+        with gr.Row():
             msg = gr.Textbox(
                 label="Your Question",
                 placeholder="Ask about weather or alerts (e.g., What's the weather in New York?)",

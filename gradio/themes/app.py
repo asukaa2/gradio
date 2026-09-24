@@ -6,7 +6,7 @@ from gradio.themes.utils.theme_dropdown import create_theme_dropdown
 dropdown, js = create_theme_dropdown()
 
 with gr.Blocks() as demo:
-    with gr.Row(equal_height=True):
+    with gr.Row():
         with gr.Column(scale=10):
             gr.Markdown(
                 """

@@ -67,7 +67,12 @@
 		progressColor:
 			gradio.props.waveform_options.waveform_progress_color || color_accent,
 		mediaControls: gradio.props.waveform_options.show_controls ?? false,
-		sampleRate: gradio.props.waveform_options.sample_rate || 44100
+		sampleRate: gradio.props.waveform_options.sample_rate || 44100,
+		// Reuse the browser HTTP cache when WaveSurfer.fetch(url) runs.
+		// Because the <audio preload="auto"> element on the page already
+		// started buffering the same URL, this lets WaveSurfer's fetch
+		// hit the cache instead of re-downloading the file.
+		fetchParams: { cache: "force-cache" }
 	});
 
 	const trim_region_settings = {

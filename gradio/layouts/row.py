@@ -36,7 +36,7 @@ class Row(BlockContext, metaclass=ComponentMeta):
         height: int | str | None = None,
         max_height: int | str | None = None,
         min_height: int | str | None = None,
-        equal_height: bool = False,
+        equal_height: bool | None = None,
         show_progress: bool = False,
         key: int | str | tuple[int | str, ...] | None = None,
         preserved_by_key: list[str] | str | None = None,
@@ -52,13 +52,24 @@ class Row(BlockContext, metaclass=ComponentMeta):
             height: The height of the row, specified in pixels if a number is passed, or in CSS units if a string is passed. If content exceeds the height, the row will scroll vertically. If not set, the row will expand to fit the content.
             max_height: The maximum height of the row, specified in pixels if a number is passed, or in CSS units if a string is passed. If content exceeds the height, the row will scroll vertically. If content is shorter than the height, the row will shrink to fit the content. Will not have any effect if `height` is set and is smaller than `max_height`.
             min_height: The minimum height of the row, specified in pixels if a number is passed, or in CSS units if a string is passed. If content exceeds the height, the row will expand to fit the content. Will not have any effect if `height` is set and is larger than `min_height`.
-            equal_height: If True, makes every child element have equal height
+            equal_height: Deprecated. Every child element now always has equal height (the Row's flex container uses `align-items: stretch` by default). The flag is accepted for backward compatibility but has no effect; passing it will emit a `DeprecationWarning`.
             show_progress: If True, shows progress animation when being updated.
             key: in a gr.render, Components with the same key across re-renders are treated as the same component, not a new component. Properties set in 'preserved_by_key' are not reset across a re-render.
-            preserved_by_key: A list of parameters from this component's constructor. Inside a gr.render() function, if a component is re-rendered with the same key, these (and only these) parameters will be preserved in the UI (if they have been changed by the user or an event listener) instead of re-rendered based on the values provided during constructor.
+            preserved_by_key: A list of parameters from this component's constructor. Inside a gr.render() function, if a component is re-rendered with the same key, these (and only these) parameters will be preserved in the UI (if they have been changed by the user or an event listener) instead of re-rendering based on the values provided during constructor.
         """
+        if equal_height is not None:
+            warnings.warn(
+                "`equal_height` is deprecated and has no effect. Every child of a "
+                "Row now always stretches to equal height via flexbox "
+                "`align-items: stretch`. Remove the `equal_height` argument from "
+                "your `gr.Row(...)` call to silence this warning.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
         self.variant = variant
-        self.equal_height = equal_height
+        # `self.equal_height` is no longer stored — equal-height is now the
+        # default behavior of the Row's flex container and is no longer
+        # toggleable. The Form layout also no longer reads this attribute.
         if variant == "compact":
             self.allow_expected_parents = False
         self.show_progress = show_progress

@@ -3,7 +3,6 @@
 	import WaveSurfer from "wavesurfer.js";
 	import RecordPlugin from "wavesurfer.js/dist/plugins/record.js";
 	import { format_time } from "@gradio/utils";
-	import { process_audio } from "./utils";
 	import { prepare_files, type FileData, type Client } from "@gradio/client";
 	import { Square } from "@gradio/icons";
 
@@ -95,32 +94,28 @@
 
 			upload_promise = (async () => {
 				try {
-					const array_buffer = await blob.arrayBuffer();
-					const context = new OfflineAudioContext(
-						1,
-						1,
-						waveform_settings.sampleRate || 44100
+					// The WaveSurfer RecordPlugin already produces a valid
+					// WAV blob (audio/wav). The previous pipeline ran
+					// `blob.arrayBuffer()` → `OfflineAudioContext.decodeAudioData`
+					// → `process_audio` (which re-walked every sample to
+					// re-encode WAV) on every recording, blocking the UI
+					// for seconds on long takes. Ship the recorded blob
+					// directly; no decode or re-encode needed.
+					const audio_blob = new File([blob], "audio.wav", {
+						type: blob.type || "audio/wav"
+					});
+
+					const prepared_files = await prepare_files([audio_blob], false);
+					const uploaded_files = await upload(
+						prepared_files,
+						root,
+						undefined,
+						max_file_size || undefined
 					);
-					const audio_buffer = await context.decodeAudioData(array_buffer);
+					const file_data = uploaded_files?.[0];
 
-					if (audio_buffer) {
-						const audio = await process_audio(audio_buffer);
-						const audio_blob = new File([new Uint8Array(audio)], "audio.wav", {
-							type: "audio/wav"
-						});
-
-						const prepared_files = await prepare_files([audio_blob], false);
-						const uploaded_files = await upload(
-							prepared_files,
-							root,
-							undefined,
-							max_file_size || undefined
-						);
-						const file_data = uploaded_files?.[0];
-
-						if (file_data) {
-							onchange?.(file_data);
-						}
+					if (file_data) {
+						onchange?.(file_data);
 					}
 				} catch (e) {
 					console.error("Error processing audio:", e);

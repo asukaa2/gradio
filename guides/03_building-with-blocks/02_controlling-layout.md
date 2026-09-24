@@ -13,11 +13,11 @@ with gr.Blocks() as demo:
         btn2 = gr.Button("Button 2")
 ```
 
-You can set every element in a Row to have the same height. Configure this with the `equal_height` argument.
+Every element in a Row automatically has the same height: the Row is a flex container whose `align-items` defaults to `stretch`, so children grow to fill the tallest sibling's height. No flag is needed.
 
 ```python
 with gr.Blocks() as demo:
-    with gr.Row(equal_height=True):
+    with gr.Row():
         textbox = gr.Textbox()
         btn2 = gr.Button("Button 2")
 ```

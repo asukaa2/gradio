@@ -3,19 +3,6 @@
 	import type { ILoadingStatus as LoadingStatus } from "@gradio/statustracker";
 	import { Gradio } from "@gradio/utils";
 
-	// export let equal_height = true;
-	// export let elem_id: string;
-	// export let elem_classes: string[] = [];
-	// export let visible: boolean | "hidden" = true;
-	// export let variant: "default" | "panel" | "compact" = "default";
-	// export let loading_status: LoadingStatus | undefined = undefined;
-	// export let gradio: Gradio | undefined = undefined;
-	// export let show_progress = false;
-	// export let height: number | string | undefined;
-	// export let min_height: number | string | undefined;
-	// export let max_height: number | string | undefined;
-	// export let scale: number | null = null;
-
 	const get_dimension = (
 		dimension_value: string | number | undefined
 	): string | undefined => {
@@ -33,7 +20,6 @@
 	let gradio = new Gradio<
 		{},
 		{
-			equal_height: boolean | null;
 			variant: "default" | "panel" | "compact";
 			height: number | string | undefined;
 			min_height: number | string | undefined;
@@ -45,8 +31,6 @@
 <div
 	class:compact={gradio.props.variant === "compact"}
 	class:panel={gradio.props.variant === "panel"}
-	class:unequal-height={gradio.props.equal_height === false}
-	class:stretch={gradio.props.equal_height}
 	class:hide={!gradio.shared.visible}
 	class:grow-children={gradio.shared.scale && gradio.shared.scale >= 1}
 	style:height={get_dimension(gradio.props.height)}
@@ -78,6 +62,9 @@
 		gap: var(--layout-gap);
 		width: var(--size-full);
 		position: relative;
+		/* Equal-height is now the default: the flex container's default
+		   `align-items` value is `stretch`, which makes every direct child
+		   fill the row's cross-axis (height). No flag is needed. */
 	}
 
 	.hide {
@@ -93,16 +80,13 @@
 		background: var(--background-fill-secondary);
 		padding: var(--size-2);
 	}
-	.unequal-height {
-		align-items: flex-start;
-	}
 
-	.stretch {
-		align-items: stretch;
-	}
-
-	.stretch > :global(.column > *),
-	.stretch > :global(.column > .form > *) {
+	/* Children placed inside .column or .form inside a row grow vertically
+	   so that a tall column makes its sibling columns' inner content stretch
+	   to the same height. Previously gated behind the `.stretch` class which
+	   was only applied when `equal_height=True`. */
+	div > :global(.column > *),
+	div > :global(.column > .form > *) {
 		flex-grow: 1;
 		flex-shrink: 0;
 	}

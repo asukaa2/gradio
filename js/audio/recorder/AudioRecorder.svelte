@@ -90,19 +90,18 @@
 		timing = false;
 		clearInterval(interval);
 		try {
-			const array_buffer = await blob.arrayBuffer();
-			const context = new OfflineAudioContext(
-				1,
-				1,
-				waveform_settings.sampleRate || 44100
-			);
-			const audio_buffer = await context.decodeAudioData(array_buffer);
-
-			if (audio_buffer)
-				await process_audio(audio_buffer).then(async (audio: Uint8Array) => {
-					await dispatch_blob([audio], "change");
-					onstoprecording?.();
-				});
+			// The WaveSurfer RecordPlugin already produces a valid WAV blob
+			// (audio/wav). The previous pipeline ran `blob.arrayBuffer()`
+			// → `OfflineAudioContext.decodeAudioData` → `process_audio`
+			// (which re-walked every sample to re-encode WAV) on every
+			// recording, blocking the UI for seconds on long takes.
+			//
+			// We now dispatch the recorded blob directly. `process_audio`
+			// is still invoked lazily from `handle_trim_audio` when the
+			// user explicitly trims a region — that path needs the
+			// decoded AudioBuffer to extract a sub-range.
+			await dispatch_blob([blob], "change");
+			onstoprecording?.();
 		} catch (e) {
 			console.error(e);
 		}

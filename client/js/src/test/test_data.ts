@@ -121,7 +121,6 @@ export const config_response: Config = {
 			props: {
 				variant: "default",
 				visible: true,
-				equal_height: false,
 				name: "row"
 			},
 			skip_api: true,
@@ -197,7 +196,6 @@ export const config_response: Config = {
 			props: {
 				variant: "default",
 				visible: true,
-				equal_height: true,
 				name: "row"
 			},
 			skip_api: true,
@@ -281,7 +279,6 @@ export const config_response: Config = {
 			props: {
 				variant: "default",
 				visible: true,
-				equal_height: true,
 				name: "row"
 			},
 			skip_api: true,

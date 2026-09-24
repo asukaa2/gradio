@@ -14,24 +14,42 @@ export function blob_to_data_url(blob: Blob): Promise<string> {
 	});
 }
 
+/**
+ * Trim + re-encode an AudioBuffer to a 16-bit PCM WAV Uint8Array.
+ *
+ * The previous implementation walked every sample of every channel in a
+ * JavaScript `for` loop to copy from the source buffer into a freshly-created
+ * trimmed buffer. For a 5-minute 44.1 kHz stereo recording that is ~26M
+ * iterations on the main thread.
+ *
+ * This version uses `Float32Array.subarray` (a view, no copy) + a single
+ * `set()` per channel to bulk-copy the trimmed range. It then reuses the
+ * source AudioBuffer's data directly when no trim is requested, skipping the
+ * intermediate buffer allocation entirely.
+ */
 export const process_audio = async (
 	audioBuffer: AudioBuffer,
 	start?: number,
 	end?: number,
 	waveform_sample_rate?: number
-): Promise<Uint8Array> => {
+): Promise<Uint8Array> {
 	const numberOfChannels = audioBuffer.numberOfChannels;
 	const sampleRate = waveform_sample_rate || audioBuffer.sampleRate;
-	const audioContext = new OfflineAudioContext(1, 1, sampleRate);
 
-	let trimmedLength = audioBuffer.length;
-	let startOffset = 0;
-	if (start != null && end != null) {
-		startOffset = Math.round(start * sampleRate);
-		const endOffset = Math.round(end * sampleRate);
-		trimmedLength = endOffset - startOffset;
+	// Fast path: no trimming requested → encode the source buffer directly.
+	// Avoids allocating a second AudioBuffer and the per-sample copy.
+	if (start == null || end == null) {
+		return audioBufferToWav(audioBuffer);
 	}
 
+	const startOffset = Math.round(start * sampleRate);
+	const endOffset = Math.round(end * sampleRate);
+	const trimmedLength = Math.max(0, endOffset - startOffset);
+
+	// Build the trimmed buffer using `copyToChannel` with a subarray view of
+	// the source channel data. `subarray` is O(1) (no copy), `copyToChannel`
+	// is a bulk memcpy at the engine level.
+	const audioContext = new OfflineAudioContext(1, 1, sampleRate);
 	const trimmedAudioBuffer = audioContext.createBuffer(
 		numberOfChannels,
 		trimmedLength,
@@ -40,10 +58,11 @@ export const process_audio = async (
 
 	for (let channel = 0; channel < numberOfChannels; channel++) {
 		const channelData = audioBuffer.getChannelData(channel);
-		const trimmedData = trimmedAudioBuffer.getChannelData(channel);
-		for (let i = 0; i < trimmedLength; i++) {
-			trimmedData[i] = channelData[startOffset + i];
-		}
+		const slice = channelData.subarray(startOffset, startOffset + trimmedLength);
+		// `copyToChannel(slice, channel)` overwrites the destination channel
+		// in a single bulk copy — equivalent to the old per-sample loop, but
+		// executed inside the audio engine instead of in JS.
+		trimmedAudioBuffer.copyToChannel(slice, channel);
 	}
 
 	return audioBufferToWav(trimmedAudioBuffer);

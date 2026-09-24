@@ -21,6 +21,11 @@
 	let currentTime = $state(0);
 	let waveform_ready = $state(false);
 
+	// Hidden native audio element. Preloads the file in parallel with the
+	// WaveSurfer.decodeAudioData call so users can play immediately on click
+	// — even before the waveform has been rendered.
+	let audio_el = $state<HTMLAudioElement | undefined>(undefined);
+
 	let resolved_src = $derived(value.url);
 
 	const create_waveform = async (): Promise<void> => {
@@ -47,7 +52,10 @@
 			normalize: true,
 			interact: true,
 			dragToSeek: true,
-			hideScrollbar: true
+			hideScrollbar: true,
+			// Let WaveSurfer's fetch reuse the audio element's already-buffered
+			// response from the browser HTTP cache instead of re-downloading.
+			fetchParams: { cache: "force-cache" }
 		});
 
 		waveform.on("play", () => (playing = true));
@@ -82,12 +90,67 @@
 		}
 	});
 
-	const togglePlay = (): void => {
-		if (waveform) {
+	// Sync state from the native element back into the UI when it's used as
+	// a fast-path player before the waveform finishes decoding.
+	function handle_native_play(): void {
+		if (waveform_ready) return; // WaveSurfer is the source of truth
+		playing = true;
+	}
+	function handle_native_pause(): void {
+		if (waveform_ready) return;
+		playing = false;
+	}
+	function handle_native_timeupdate(): void {
+		if (waveform_ready || !audio_el) return;
+		currentTime = audio_el.currentTime;
+	}
+	function handle_native_loadedmetadata(): void {
+		if (waveform_ready || !audio_el) return;
+		duration = audio_el.duration || 0;
+	}
+	function handle_native_ended(): void {
+		if (waveform_ready) return;
+		playing = false;
+		if (loop && audio_el) {
+			audio_el.currentTime = 0;
+			void audio_el.play();
+		}
+	}
+
+	const togglePlay = async (): Promise<void> => {
+		// Fast path: if the waveform is ready, use it.
+		if (waveform_ready && waveform) {
 			waveform.playPause();
+			return;
+		}
+		// Otherwise, fall back to the native element so the user hears
+		// audio immediately instead of waiting for `decodeAudioData` to
+		// finish drawing the waveform.
+		if (!audio_el) return;
+		if (audio_el.paused) {
+			try {
+				await audio_el.play();
+			} catch (e) {
+				console.error("Audio playback failed:", e);
+			}
+		} else {
+			audio_el.pause();
 		}
 	};
 </script>
+
+<!-- Hidden native audio element. preload="auto" so the browser starts
+     buffering the file the moment this element mounts. -->
+<audio
+	bind:this={audio_el}
+	src={resolved_src}
+	preload="auto"
+	onplay={handle_native_play}
+	onpause={handle_native_pause}
+	ontimeupdate={handle_native_timeupdate}
+	onloadedmetadata={handle_native_loadedmetadata}
+	onended={handle_native_ended}
+></audio>
 
 <div
 	class="minimal-audio-player"

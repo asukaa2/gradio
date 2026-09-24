@@ -222,6 +222,25 @@
 		}
 	});
 
+	// Parallel pre-load: start buffering the audio element as soon as the URL
+	// is known, even while the WaveSurfer instance is still being created or
+	// its `decodeAudioData` is running. The browser's HTTP cache means
+	// WaveSurfer's separate `fetch(url)` will hit cache for the bytes it
+	// needs, so the two downloads are effectively deduped. When the user
+	// hits play before the waveform is ready, the native element can begin
+	// playback immediately instead of stalling on the decode.
+	$effect(() => {
+		if (!audio_player || !url) return;
+		if (is_stream) return;
+		if (!use_waveform) return; // native path sets its own src
+		if (native_fallback_active) return; // error path sets its own src
+		const media = audio_player;
+		if (media.getAttribute("src") !== url) {
+			media.src = url;
+			media.load();
+		}
+	});
+
 	function handle_waveform_error(
 		e: Error | MediaError,
 		failed_url?: string
@@ -450,7 +469,7 @@
 			audio_duration = audio_player.duration;
 		}
 	}}
-	preload="metadata"
+	preload="auto"
 >
 </audio>
 {#if value === null}

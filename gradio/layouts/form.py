@@ -48,8 +48,11 @@ class Form(BlockContext, metaclass=ComponentMeta):
         elif (
             isinstance(self.parent, Column)
             and isinstance(self.parent.parent, Row)
-            and self.parent.parent.equal_height
         ):
+            # Previously gated on `self.parent.parent.equal_height`. Since
+            # every Row now always stretches its children to equal height, we
+            # always propagate the child's scale up through the Form so the
+            # column can grow to fill the row's height.
             scale = getattr(child, "scale", None)
             self.scale += 1 if scale is None else scale
         elif isinstance(self.parent, Blocks) and self.parent.fill_height:

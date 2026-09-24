@@ -59,7 +59,6 @@ XRAY_CONFIG = {
             "props": {
                 "variant": "default",
                 "visible": True,
-                "equal_height": True,
                 "name": "row",
             },
         },
@@ -140,7 +139,6 @@ XRAY_CONFIG = {
             "props": {
                 "variant": "default",
                 "visible": True,
-                "equal_height": True,
                 "name": "row",
             },
         },
@@ -407,7 +405,6 @@ XRAY_CONFIG_DIFF_IDS = {
             "props": {
                 "variant": "default",
                 "visible": True,
-                "equal_height": True,
                 "name": "row",
             },
         },
@@ -488,7 +485,6 @@ XRAY_CONFIG_DIFF_IDS = {
             "props": {
                 "variant": "default",
                 "visible": True,
-                "equal_height": True,
                 "name": "row",
             },
         },
@@ -749,7 +745,6 @@ XRAY_CONFIG_WITH_MISTAKE = {
             "props": {
                 "type": "row",
                 "variant": "default",
-                "equal_height": True,
                 "value": True,
             },
         },
@@ -802,7 +797,6 @@ XRAY_CONFIG_WITH_MISTAKE = {
             "props": {
                 "type": "row",
                 "variant": "default",
-                "equal_height": True,
                 "value": True,
             },
         },
