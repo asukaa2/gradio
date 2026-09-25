@@ -216,6 +216,106 @@ def toorjson(value):
 templates = Jinja2Templates(directory=STATIC_TEMPLATE_LIB)
 templates.env.filters["toorjson"] = toorjson
 
+# When the gradio package is installed from source (e.g. `pip install -e .`
+# on a fresh clone), the `gradio/templates/frontend/` directory is not
+# populated — it's produced by `scripts/build_frontend.sh` and shipped
+# pre-built in the pip package. As a result, `frontend/share.html` and
+# `frontend/index.html` are missing and `templates.TemplateResponse(...)`
+# raises `TemplateNotFound`.
+#
+# Rather than crashing with `ValueError: Did you install Gradio from source
+# files? ...`, we fall back to this inline Jinja2 template that loads the
+# gradio SPA bundle (`gradio.js`) from the public S3 CDN. This lets share
+# mode and regular mode work out of the box in source installs.
+#
+# Caveat: the CDN bundle is the published version below, not the source
+# version, so any in-tree Svelte/TS changes (audio speedups, layout tweaks,
+# etc.) will NOT be visible at runtime until the frontend is rebuilt with
+# `bash scripts/build_frontend.sh`. But the app launches and is usable.
+# `SHARE_FALLBACK_CDN_VERSION` is the latest published gradio version on
+# the CDN at the time of writing — bump it as needed when newer versions
+# are released.
+SHARE_FALLBACK_CDN_VERSION = "6.3.0"
+SHARE_FALLBACK_CDN_BASE = "https://gradio.s3-us-west-2.amazonaws.com"
+
+_INLINE_FALLBACK_TEMPLATE = """<!doctype html>
+<html lang="en" style="margin:0;padding:0;min-height:100%;display:flex;flex-direction:column;">
+<head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+        <meta property="og:title" content="{{ config.get('title', '') or 'Gradio' }}" />
+        <meta property="og:description" content="{{ config.get('simple_description', '') or 'Click to try out the app!' }}" />
+        <meta property="og:image" content="{{ config.get('thumbnail', '') or '' }}" />
+        <style>
+                :root {
+                        --bg: {{ config.get('body_css', {}).get('body_background_fill', 'white') }};
+                        --col: {{ config.get('body_css', {}).get('body_text_color', '#1f2937') }};
+                        --bg-dark: {{ config.get('body_css', {}).get('body_background_fill_dark', '#0b0f19') }};
+                        --col-dark: {{ config.get('body_css', {}).get('body_text_color_dark', '#f3f4f6') }};
+                }
+                body { background: var(--bg); color: var(--col); font-family: Arial, Helvetica, sans-serif; }
+                @media (prefers-color-scheme: dark) {
+                        body { background: var(--bg-dark); color: var(--col-dark); }
+                }
+        </style>
+        <script>window.gradio_config = {{ config | toorjson }};</script>
+        <script>window.gradio_api_info = {{ gradio_api_info | toorjson }};</script>
+        {% if share %}
+        <script src="https://cdnjs.cloudflare.com/ajax/libs/iframe-resizer/4.3.1/iframeResizer.contentWindow.min.js" async></script>
+        <script data-gradio-mode>
+                window.__gradio_mode__ = "app";
+                window.iFrameResizer = { autoResize: false, sizeWidth: false };
+                window.parent?.postMessage({ type: "SET_SCROLLING", enabled: false }, "*");
+        </script>
+        {% endif %}
+        <link rel="manifest" href="/manifest.json" />
+        <script type="module" crossorigin src="{{ cdn_base }}/{{ cdn_version }}/gradio.js"></script>
+</head>
+<body style="width:100%;margin:0;padding:0;display:flex;flex-direction:column;flex-grow:1;">
+        <gradio-app control_page_title="true" embed="false" eager="true" style="display:flex;flex-direction:column;flex-grow:1"></gradio-app>
+</body>
+</html>
+"""
+
+
+def _render_inline_fallback(
+    *,
+    request: fastapi.Request,
+    config: dict,
+    gradio_api_info: dict,
+    share: bool,
+) -> HTMLResponse:
+    """Render the inline CDN-loaded fallback template.
+
+    Used when `frontend/share.html` or `frontend/index.html` is missing
+    (i.e. running Gradio from source without building the frontend).
+    Emits a one-time warning so the user knows their in-tree Svelte/TS
+    changes won't be visible at runtime until they rebuild the frontend.
+    """
+    import warnings
+
+    warnings.warn(
+        "Gradio frontend template not found — falling back to an inline "
+        f"CDN-loaded template (gradio.js v{SHARE_FALLBACK_CDN_VERSION} from "
+        f"{SHARE_FALLBACK_CDN_BASE}). This usually means you are running "
+        "Gradio from source without building the frontend. In-tree Svelte/TS "
+        "changes will NOT be visible at runtime until you build the frontend "
+        "with: bash scripts/build_frontend.sh",
+        stacklevel=2,
+    )
+    inline_tmpl = templates.env.from_string(_INLINE_FALLBACK_TEMPLATE)
+    rendered = inline_tmpl.render(
+        request=request,
+        config=config,
+        gradio_api_info=gradio_api_info,
+        share=share,
+        cdn_base=SHARE_FALLBACK_CDN_BASE,
+        cdn_version=SHARE_FALLBACK_CDN_VERSION,
+        base_url="./",
+    )
+    return HTMLResponse(content=rendered)
+
+
 # Shared transport keeps the connection pool warm without sharing an
 # `httpx.AsyncClient` (and therefore a cookie jar) across `/proxy=` requests.
 # A single shared `AsyncClient` would persist `Set-Cookie` headers from one
@@ -764,16 +864,33 @@ class App(FastAPI):
                 )
                 return resp
             except TemplateNotFound as err:
-                if blocks.share:
-                    raise ValueError(
-                        "Did you install Gradio from source files? Share mode only "
-                        "works when Gradio is installed through the pip package."
-                    ) from err
-                else:
-                    raise ValueError(
-                        "Did you install Gradio from source files? You need to build "
-                        "the frontend by running /scripts/build_frontend.sh"
-                    ) from err
+                # The file template (`frontend/share.html` or
+                # `frontend/index.html`) is missing. This happens when the
+                # gradio package is installed from source without building
+                # the frontend — `gradio/templates/*` is git-ignored and is
+                # only populated by `scripts/build_frontend.sh` or shipped
+                # pre-built in the pip package.
+                #
+                # Previously this raised:
+                #   ValueError: Did you install Gradio from source files?
+                #   Share mode only works when Gradio is installed through
+                #   the pip package.
+                #
+                # We now fall back to an inline CDN-loaded template so the
+                # app still launches. The user gets a one-time warning
+                # explaining that in-tree Svelte/TS changes won't be visible
+                # at runtime until they rebuild the frontend.
+                gradio_api_info = get_api_info(
+                    request,
+                    page=page,
+                    route_path=(f"{API_PREFIX}/runs" if is_run_history else f"/{page}"),
+                )
+                return _render_inline_fallback(
+                    request=request,
+                    config=config,
+                    gradio_api_info=gradio_api_info,
+                    share=blocks.share,
+                )
 
         @router.get("/runs", response_class=HTMLResponse)
         @router.get("/runs/", response_class=HTMLResponse)
